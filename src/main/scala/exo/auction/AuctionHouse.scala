@@ -20,7 +20,9 @@ object AuctionHouse {
 		}
 		case class Interrogate(client: ActorRef[Interrogate.Response], item: String) extends Command
 		object Interrogate {
-			case class Response(history: Seq[Bid])
+			sealed trait Response
+			case class Found(history: Seq[Bid]) extends Response
+			case object NotFound extends Response
 		}
 	}
 	case class BidderCommand(bidder: Bidder, command: BidderCommand.Command) extends Command
@@ -28,15 +30,21 @@ object AuctionHouse {
 		sealed trait Command
 		case class Interrogate(client: ActorRef[Interrogate.Response], states: Set[Auction.State], mine: Boolean) extends Command
 		object Interrogate {
-			case class Response(auctions: Seq[Auction]) //TODO looks big: need the functional use case to reduce this
+			case class Response(auctions: Seq[Auction])//TODO looks big: need the functional use case to reduce this
 		}
 		case class Join(client: ActorRef[Join.Response], item: String) extends Command
 		object Join {
-			case class Response(ok: Boolean)
+			trait Response
+			case object Joined extends Response
+			case class Denied(e: Throwable) extends Response
+			case object NotFound extends Response
 		}
 		case class Bid(client: ActorRef[Bid.Response], item: String, price: Double) extends Command
 		object Bid {
-			case class Response(ok: Boolean)
+			sealed trait Response
+			case object Put extends Response
+			case class Denied(e: Throwable) extends Response
+			case object NotFound extends Response
 		}
 	}
 
@@ -73,7 +81,10 @@ object AuctionHouse {
 				Behaviors.same
 			}
 			case AuctioneerCommand.Interrogate(client, item) =>
-				client ! AuctioneerCommand.Interrogate.Response(state.auctions(item).bids)
+				client ! (state.auctions.get(item) match {
+					case Some(auction) => AuctioneerCommand.Interrogate.Found(auction.bids)
+					case None => AuctioneerCommand.Interrogate.NotFound
+				})
 				Behaviors.same
 		}
 		case BidderCommand(bidder, command) => command match {
@@ -85,24 +96,36 @@ object AuctionHouse {
 						(auctionState: Auction) => states(auctionState.state)
 				client ! BidderCommand.Interrogate.Response(state.auctions.values.filter(filter).toSeq)
 				Behaviors.same
-			case BidderCommand.Join(client, item) => try {
-				val behavior = auctionHouse(state.set(state.auctions(item).join(bidder)))
-				client ! BidderCommand.Join.Response(true)
-				behavior
-			} catch {case NonFatal(_) =>
-				client ! BidderCommand.Join.Response(false)
-				Behaviors.same
+			case BidderCommand.Join(client, item) => state.auctions.get(item) match {
+				case Some(auction) =>
+					val (message, behavior: Behavior[Command]) = try {
+						val behavior = auctionHouse(state.set(auction.join(bidder)))
+						(BidderCommand.Join.Joined, behavior)
+					} catch {case NonFatal(e) =>
+						(BidderCommand.Join.Denied(e), Behaviors.same)
+					}
+					client ! message
+					behavior
+				case None =>
+					client ! BidderCommand.Join.NotFound
+					Behaviors.same
 			}
-			case BidderCommand.Bid(client, item, price) => try {
-				val behavior = auctionHouse(state.set(state.auctions(item).bid(bidder, price)))
-				client ! BidderCommand.Bid.Response(true)
-				behavior
-			} catch {case NonFatal(_) =>
-				client ! BidderCommand.Bid.Response(false)
-				Behaviors.same
+			case BidderCommand.Bid(client, item, price) => state.auctions.get(item) match {
+				case Some(auction) =>
+					val (message, behavior: Behavior[Command]) = try {
+						val behavior = auctionHouse(state.set(auction.bid(bidder, price)))
+						(BidderCommand.Bid.Put, behavior)
+					} catch {case NonFatal(e) =>
+						(BidderCommand.Bid.Denied(e), Behaviors.same)
+					}
+					client ! message
+					behavior
+				case None =>
+					client ! BidderCommand.Bid.NotFound
+					Behaviors.same
 			}
 		}
 	}}
 
-	val system = ActorSystem(behavior, "hello")
+	def createSystem = ActorSystem(behavior, "action-house")
 }

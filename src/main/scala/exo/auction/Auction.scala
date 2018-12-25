@@ -1,6 +1,5 @@
-package exo.auction
-
-import java.time.LocalDateTime
+package exo
+package auction
 
 case class Auction(
 	initial: InitialAuction,
@@ -9,10 +8,10 @@ case class Auction(
 ) {
 	import Auction.State._
 	import initial.parameters.{price => initialPrice, _}
-	def currentPrice = bids.lastOption.map(_.price)
+	def currentPrice = bids.headOption.map(_.price)
 	private def minimumBid = currentPrice.map(policy.minimumBid).getOrElse(initialPrice)
 	def state = {
-		val now = LocalDateTime.now
+		val now = auction.now
 		if (now.compareTo(start) < 0)
 			planned
 		else if (now.compareTo(end) < 0)
@@ -26,13 +25,15 @@ case class Auction(
 		copy(initial = initial)
 	}
 	def join(bidder: Bidder) = {
-		require(state == planned)
+		require(state == planned, "The auction started")
 		copy(bidders = bidders + bidder)
 	}
 	def bid(bidder: Bidder, price: Double) = {
-		require(state == started)
-		require(bidders(bidder))
-		require(price >= minimumBid)
+		val state = this.state
+		require(state == started, if (state == closed) "The auction is already closed" else "The auction is not open yet")
+		require(bidders(bidder), "The bidder did not subscribe")
+		val minimumBid = this.minimumBid
+		require(price >= minimumBid, s"The minimum bid price is $minimumBid")
 		copy(bids = Bid(bidder, price) :: bids)
 	}
 }
@@ -40,6 +41,7 @@ case class Auction(
 object Auction {
 	object State extends Enumeration {
 		val planned, started, closed = Value
+		lazy val fromName = values.groupBy(_.toString).mapValues(_.head)
 	}
 	type State = State.Value
 }

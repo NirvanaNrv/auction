@@ -9,5 +9,4 @@ object Policy {
 		require(value >= cent)
 		def minimumBid(price: Double) = price + value
 	}
-	def apply(increment: Double): Policy = Constant(increment)
 }
