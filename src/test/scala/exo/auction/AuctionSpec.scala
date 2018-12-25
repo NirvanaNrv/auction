@@ -1,12 +1,9 @@
 package exo.auction
 
 import java.time.LocalDateTime
-
-import akka.http.scaladsl.marshalling.Marshal
 import org.scalatest.{Matchers, WordSpec}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.http.scaladsl.unmarshalling.Unmarshal
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
 

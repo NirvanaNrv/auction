@@ -2,7 +2,6 @@ package exo.auction
 
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json._
 
@@ -34,4 +33,5 @@ object JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
 	implicit val bidderFormat = jsonFormat1(Bidder)
 	implicit val bidFormat = jsonFormat2(Bid)
 	implicit val auctionFormat = jsonFormat3(Auction.apply)
+	implicit val winnerFormat = jsonFormat2(Winner)
 }

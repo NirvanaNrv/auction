@@ -2,7 +2,7 @@ package exo.auction
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-
+import exo.auction.Auction.State.closed
 import scala.util.control.NonFatal
 
 object AuctionHouse {
@@ -23,6 +23,14 @@ object AuctionHouse {
 			sealed trait Response
 			case class Found(history: Seq[Bid]) extends Response
 			case object NotFound extends Response
+		}
+		case class GetWinner(client: ActorRef[GetWinner.Response], item: String) extends Command
+		object GetWinner {
+			sealed trait Response
+			case class Won(winner: Bidder, price: Double) extends Response
+			case object NotFound extends Response
+			case object None extends Response
+			case object NotClosed extends Response
 		}
 	}
 	case class BidderCommand(bidder: Bidder, command: BidderCommand.Command) extends Command
@@ -84,6 +92,17 @@ object AuctionHouse {
 				client ! (state.auctions.get(item) match {
 					case Some(auction) => AuctioneerCommand.Interrogate.Found(auction.bids)
 					case None => AuctioneerCommand.Interrogate.NotFound
+				})
+				Behaviors.same
+			case AuctioneerCommand.GetWinner(client, item) =>
+				client ! (state.auctions.get(item) match {
+					case Some(auction) =>
+						if (auction.state == closed)
+							if (auction.currentPrice.nonEmpty)
+								AuctioneerCommand.GetWinner.Won(auction.bids.head.bidder, auction.currentPrice.get) //TODO make a winner function on auction, to be called by currentPrice
+							else AuctioneerCommand.GetWinner.None
+						else AuctioneerCommand.GetWinner.NotClosed
+					case None => AuctioneerCommand.GetWinner.NotFound
 				})
 				Behaviors.same
 		}

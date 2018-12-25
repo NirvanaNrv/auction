@@ -1,14 +1,11 @@
 package exo.auction
 
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.Directives._
 import scala.concurrent.Future
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.server.Route
 import akka.util.Timeout
-import spray.json._
 import scala.concurrent.duration._
 import scala.util.Success
 
@@ -70,29 +67,40 @@ class Router {
 			} ~
 			put {
 				path(Segment) {item =>
-					pathEnd {
-						import AuctioneerCommand._
-						entity(as[AuctionParameters]) { parameters =>
-							implicit val timeout: Timeout = 1.second
-							val update: Future[Update.Response] = auctionHouse ? (ref => AuctioneerCommand(Update(ref, InitialAuction(item, parameters))))
-							onComplete(update) {
-								case Success(Update.Response(true)) => complete(StatusCodes.OK)
-								case Success(Update.Response(false)) => complete(StatusCodes.NotFound)
-								case _ => complete(StatusCodes.InternalServerError)
-							}
+					import AuctioneerCommand._
+					entity(as[AuctionParameters]) { parameters =>
+						implicit val timeout: Timeout = 1.second
+						val update: Future[Update.Response] = auctionHouse ? (ref => AuctioneerCommand(Update(ref, InitialAuction(item, parameters))))
+						onComplete(update) {
+							case Success(Update.Response(true)) => complete(StatusCodes.OK)
+							case Success(Update.Response(false)) => complete(StatusCodes.NotFound)
+							case _ => complete(StatusCodes.InternalServerError)
 						}
 					}
 				}
 			} ~
 			get {
 				import AuctioneerCommand._
-				path(Segment) {item =>
-					implicit val timeout: Timeout = 1.second
-					val get: Future[Interrogate.Response] = auctionHouse ? (ref => AuctioneerCommand(Interrogate(ref, item)))
-					onComplete(get) {
-						case Success(Interrogate.Found(history)) => complete(history)
-						case Success(Interrogate.NotFound) => complete(StatusCodes.NotFound)
-						case _ => complete(StatusCodes.InternalServerError)
+				pathPrefix(Segment) {item =>
+					pathEnd {
+						implicit val timeout: Timeout = 1.second
+						val get: Future[Interrogate.Response] = auctionHouse ? (ref => AuctioneerCommand(Interrogate(ref, item)))
+						onComplete(get) {
+							case Success(Interrogate.Found(history)) => complete(history)
+							case Success(Interrogate.NotFound) => complete(StatusCodes.NotFound)
+							case _ => complete(StatusCodes.InternalServerError)
+						}
+					} ~
+					path("winner") {
+						implicit val timeout: Timeout = 1.second
+						val get: Future[GetWinner.Response] = auctionHouse ? (ref => AuctioneerCommand(GetWinner(ref, item)))
+						onComplete(get) {
+							case Success(GetWinner.Won(bidder, price)) => complete(Winner(bidder.name, price))
+							case Success(GetWinner.None) => complete(StatusCodes.OK, "")
+							case Success(GetWinner.NotClosed) => complete(StatusCodes.Conflict)
+							case Success(GetWinner.NotFound) => complete(StatusCodes.NotFound)
+							case _ => complete(StatusCodes.InternalServerError)
+						}
 					}
 				}
 			}

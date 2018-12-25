@@ -13,3 +13,5 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % Test
 libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.14.0" % Test
 libraryDependencies += "com.typesafe.akka" %% "akka-testkit" % akkaVersion % Test
 libraryDependencies += "com.typesafe.akka" %% "akka-http-testkit" % "10.1.6" % Test
+
+parallelExecution in Test := false

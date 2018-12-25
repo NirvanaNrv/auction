@@ -46,12 +46,21 @@ class PropertyAuctionSpec extends AuctionSpec with PropertyChecks {
 					responseAs[String] shouldEqual ""
 					status shouldBe StatusCodes.Created
 				}
-				val minPrice = policy.minimumBid(secondBet)
 
+				val minPrice = policy.minimumBid(secondBet)
 				forAll(Gen.choose(0.0, 100)) {lowPriceDelta: Double =>
 					val lowPrice = minPrice - cent - lowPriceDelta
 					Post(Uri(path = Path / "auctions" / item / "bids"), HttpEntity(`application/json`, newBid(lowPrice))) ~> route ~> check {
 						status shouldBe StatusCodes.Conflict
+					}
+				}
+
+				setTime = Some(LocalDateTime.parse("2019-01-01T01:00:00"))
+				Get(Uri(path = Path / "auctions" / item / "winner")) ~> route ~> check {
+					status shouldEqual StatusCodes.OK
+					if (status == StatusCodes.OK) {
+						import JsonSupport._
+						responseAs[Winner].price shouldBe secondBet //TODO seems to work, but need to check what doubles do about precision
 					}
 				}
 			}

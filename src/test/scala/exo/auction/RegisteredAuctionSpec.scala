@@ -1,7 +1,6 @@
 package exo.auction
 
 import java.time.LocalDateTime
-
 import akka.http.scaladsl.model.MediaTypes._
 import akka.http.scaladsl.model.Uri.{Path, Query}
 import akka.http.scaladsl.model.{HttpEntity, StatusCodes, Uri}
